@@ -1,10 +1,7 @@
-import math
 import random
 from collections import deque
 
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
-from streamlit_image_coordinates import streamlit_image_coordinates
 
 st.set_page_config(
     page_title="Evita la Inducción",
@@ -18,28 +15,9 @@ st.set_page_config(
 
 ROWS = 10
 COLS = 14
-CELL = 56
-PAD = 18
-GRID_GAP = 2
-
-OBSTACLE_DENSITY = 0.17
+OBSTACLE_DENSITY = 0.16
 MIN_DIST = 7
-MAX_SCENARIO_ATTEMPTS = 500
-
-ROAD_COLOR = "#D6DEE8"
-EMPTY_COLOR = "#F8FAFC"
-GRID_LINE = "#B8C4D1"
-POWER_COLOR = "#D62828"
-GAS_COLOR = "#2563EB"
-A_COLOR = "#16A34A"
-B_COLOR = "#15803D"
-C_COLOR = "#0891B2"
-D_COLOR = "#0E7490"
-BUILDING_COLOR = "#6B7280"
-PARK_COLOR = "#86EFAC"
-SUB_COLOR = "#D1D5DB"
-TARGET_GLOW = "#FACC15"
-TEXT_DARK = "#0F172A"
+MAX_SCENARIO_ATTEMPTS = 400
 
 # ============================================================
 # ESTILOS
@@ -54,15 +32,15 @@ st.markdown(
         padding-bottom: 1rem;
     }
 
-    .main-title {
-        font-size: 2.3rem;
+    .title-main {
+        font-size: 2.2rem;
         font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.15rem;
+        margin-bottom: 0.2rem;
     }
 
-    .subtitle {
-        font-size: 1.05rem;
+    .subtitle-main {
+        font-size: 1.02rem;
         color: #334155;
         margin-bottom: 1rem;
     }
@@ -70,8 +48,8 @@ st.markdown(
     .card {
         background: #f8fafc;
         border: 1px solid #cbd5e1;
-        border-radius: 18px;
-        padding: 1rem 1rem 0.9rem 1rem;
+        border-radius: 16px;
+        padding: 1rem;
         margin-bottom: 1rem;
     }
 
@@ -79,7 +57,7 @@ st.markdown(
         font-size: 1.15rem;
         font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.6rem;
+        margin-bottom: 0.7rem;
     }
 
     .status-box {
@@ -91,6 +69,17 @@ st.markdown(
         font-size: 1rem;
         font-weight: 700;
         margin-bottom: 0.8rem;
+    }
+
+    .board-legend {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+    }
+
+    .legend-item {
+        font-size: 0.95rem;
+        color: #1f2937;
     }
 
     .score-box {
@@ -109,7 +98,7 @@ st.markdown(
     }
 
     .score-value {
-        font-size: 2.8rem;
+        font-size: 2.7rem;
         font-weight: 900;
         line-height: 1.05;
     }
@@ -118,64 +107,17 @@ st.markdown(
     .score-mid { color: #d97706; }
     .score-high { color: #dc2626; }
 
-    .legend-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px 12px;
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #1f2937;
-        font-size: 0.95rem;
-    }
-
-    .legend-swatch {
-        width: 24px;
-        height: 24px;
-        border-radius: 7px;
-        border: 1px solid #475569;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.8rem;
-        font-weight: 800;
-        color: white;
-        flex-shrink: 0;
-    }
-
     div[data-testid="stButton"] > button {
         width: 100%;
-        border-radius: 12px;
+        min-height: 2.8rem;
+        border-radius: 10px;
         font-weight: 700;
+        padding: 0.2rem 0.2rem;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
-# ============================================================
-# FUENTES
-# ============================================================
-
-def get_font(size: int, bold: bool = False):
-    candidates = [
-        "arialbd.ttf" if bold else "arial.ttf",
-        "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
-    ]
-    for c in candidates:
-        try:
-            return ImageFont.truetype(c, size=size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
-
-FONT_SMALL = get_font(16, bold=True)
-FONT_MED = get_font(22, bold=True)
-FONT_BIG = get_font(28, bold=True)
-FONT_SYMBOL = get_font(24, bold=True)
 
 # ============================================================
 # UTILIDADES
@@ -193,22 +135,77 @@ def manhattan(a, b):
 
 
 def path_exists(start, end, obstacles):
-    q = deque([start])
+    queue = deque([start])
     visited = {start}
 
-    while q:
-        current = q.popleft()
+    while queue:
+        current = queue.popleft()
         if current == end:
             return True
+
         for n in neighbors(*current):
             if n not in visited and n not in obstacles:
                 visited.add(n)
-                q.append(n)
+                queue.append(n)
+
     return False
 
 
 def free_neighbors_count(cell, obstacles):
     return sum(1 for n in neighbors(*cell) if n not in obstacles)
+
+
+def score_path(power_path, gas_path, current):
+    base = 0.0
+    close_penalty = 0.0
+    parallel_penalty = 0.0
+
+    for a in power_path:
+        for b in gas_path:
+            d = manhattan(a, b)
+
+            if d == 0:
+                base += 1000
+            else:
+                base += 1 / (d ** 2)
+
+            if d == 1:
+                close_penalty += 8.0
+            elif d == 2:
+                close_penalty += 3.5
+            elif d == 3:
+                close_penalty += 1.2
+
+    power_segments = list(zip(power_path[:-1], power_path[1:]))
+    gas_segments = list(zip(gas_path[:-1], gas_path[1:]))
+
+    def orientation(seg):
+        (r1, c1), (r2, c2) = seg
+        if r1 == r2:
+            return "h"
+        if c1 == c2:
+            return "v"
+        return "o"
+
+    for ps in power_segments:
+        for gs in gas_segments:
+            if orientation(ps) == orientation(gs):
+                dmin = min(manhattan(p1, p2) for p1 in ps for p2 in gs)
+                if dmin == 1:
+                    parallel_penalty += 9.0
+                elif dmin == 2:
+                    parallel_penalty += 4.0
+
+    total = current * (base + close_penalty + parallel_penalty) / 100.0
+    return max(total, 0.0)
+
+
+def score_class(score):
+    if score < 80:
+        return "score-low", "Inducción baja"
+    if score < 150:
+        return "score-mid", "Inducción moderada"
+    return "score-high", "Inducción alta"
 
 # ============================================================
 # ESCENARIO
@@ -237,10 +234,10 @@ def generate_valid_scenario():
         A = B = C = D = None
 
         for a in free:
-            Bs = [x for x in free if x != a and manhattan(a, x) >= MIN_DIST]
-            if Bs:
+            candidates_b = [x for x in free if x != a and manhattan(a, x) >= MIN_DIST]
+            if candidates_b:
                 A = a
-                B = random.choice(Bs)
+                B = random.choice(candidates_b)
                 break
 
         if A is None or B is None:
@@ -248,7 +245,7 @@ def generate_valid_scenario():
 
         remaining = [x for x in free if x not in {A, B}]
         for c in remaining:
-            Ds = [
+            candidates_d = [
                 x for x in remaining
                 if x != c
                 and manhattan(c, x) >= MIN_DIST
@@ -257,9 +254,9 @@ def generate_valid_scenario():
                 and manhattan(x, A) >= 4
                 and manhattan(x, B) >= 4
             ]
-            if Ds:
+            if candidates_d:
                 C = c
-                D = random.choice(Ds)
+                D = random.choice(candidates_d)
                 break
 
         if None in [A, B, C, D]:
@@ -318,16 +315,45 @@ def new_scenario():
 
 
 def restore_previous():
-    prev = st.session_state.get("previous_scenario")
-    if prev is not None:
+    if st.session_state.previous_scenario is not None:
         current = st.session_state.scenario
-        st.session_state.scenario = prev
+        st.session_state.scenario = st.session_state.previous_scenario
         st.session_state.previous_scenario = current
         reset_same_scenario()
 
 # ============================================================
-# LÓGICA DE JUEGO
+# TABLERO
 # ============================================================
+
+def cell_info(pos, scenario, power_path, gas_path, mode, done):
+    if pos in scenario["obstacles"]:
+        kind = scenario["obstacles"][pos]
+        if kind == "building":
+            return "🏢", "Edificio"
+        if kind == "park":
+            return "🌳", "Parque"
+        return "⚡", "Subestación"
+
+    if pos == scenario["A"]:
+        return "A", "Inicio eléctrico"
+    if pos == scenario["B"]:
+        return "B", "Fin eléctrico"
+    if pos == scenario["C"]:
+        return "C", "Inicio gas"
+    if pos == scenario["D"]:
+        return "D", "Fin gas"
+    if pos in power_path:
+        return "🔴", "Ruta eléctrica"
+    if pos in gas_path:
+        return "🔵", "Ruta de gas"
+
+    if mode == "power" and pos == scenario["B"]:
+        return "B", "Objetivo actual"
+    if mode == "gas" and pos == scenario["D"]:
+        return "D", "Objetivo actual"
+
+    return "·", "Celda libre"
+
 
 def handle_cell_click(pos):
     scenario = st.session_state.scenario
@@ -352,254 +378,98 @@ def handle_cell_click(pos):
     if pos in path:
         return
 
-    if pos in neighbors(*path[-1]):
-        path.append(pos)
+    if pos not in neighbors(*path[-1]):
+        return
 
-        if pos == target:
-            if st.session_state.mode == "power":
-                st.session_state.mode = "gas"
-            else:
-                st.session_state.done = True
-                st.session_state.current_score = score_path(
-                    st.session_state.power_path,
-                    st.session_state.gas_path,
-                    st.session_state.current_a,
-                )
+    path.append(pos)
 
-# ============================================================
-# PUNTAJE
-# ============================================================
-
-def score_path(power_path, gas_path, current):
-    base = 0.0
-    close_penalty = 0.0
-    parallel_penalty = 0.0
-
-    for a in power_path:
-        for b in gas_path:
-            d = manhattan(a, b)
-
-            if d == 0:
-                base += 1000
-            else:
-                base += 1 / (d ** 2)
-
-            if d == 1:
-                close_penalty += 8.0
-            elif d == 2:
-                close_penalty += 3.5
-            elif d == 3:
-                close_penalty += 1.2
-
-    power_segments = list(zip(power_path[:-1], power_path[1:]))
-    gas_segments = list(zip(gas_path[:-1], gas_path[1:]))
-
-    def orientation(seg):
-        (r1, c1), (r2, c2) = seg
-        if r1 == r2:
-            return "h"
-        if c1 == c2:
-            return "v"
-        return "o"
-
-    for ps in power_segments:
-        for gs in gas_segments:
-            if orientation(ps) == orientation(gs):
-                dmin = min(manhattan(p1, p2) for p1 in ps for p2 in gs)
-                if dmin == 1:
-                    parallel_penalty += 9.0
-                elif dmin == 2:
-                    parallel_penalty += 4.0
-
-    total = current * (base + close_penalty + parallel_penalty) / 100.0
-    return max(total, 0.0)
-
-
-def score_class(score):
-    if score < 80:
-        return "score-low", "Inducción baja"
-    if score < 150:
-        return "score-mid", "Inducción moderada"
-    return "score-high", "Inducción alta"
+    if pos == target:
+        if st.session_state.mode == "power":
+            st.session_state.mode = "gas"
+        else:
+            st.session_state.done = True
+            st.session_state.current_score = score_path(
+                st.session_state.power_path,
+                st.session_state.gas_path,
+                st.session_state.current_a,
+            )
 
 # ============================================================
-# TABLERO VISUAL
-# ============================================================
-
-def cell_bbox(r, c):
-    x0 = PAD + c * (CELL + GRID_GAP)
-    y0 = PAD + r * (CELL + GRID_GAP)
-    x1 = x0 + CELL
-    y1 = y0 + CELL
-    return x0, y0, x1, y1
-
-
-def draw_centered_text(draw, bbox, text, font, fill):
-    x0, y0, x1, y1 = bbox
-    bb = draw.textbbox((0, 0), text, font=font)
-    tw = bb[2] - bb[0]
-    th = bb[3] - bb[1]
-    tx = x0 + (x1 - x0 - tw) / 2
-    ty = y0 + (y1 - y0 - th) / 2 - 2
-    draw.text((tx, ty), text, font=font, fill=fill)
-
-
-def draw_building(draw, bbox):
-    x0, y0, x1, y1 = bbox
-    draw.rounded_rectangle(bbox, radius=10, fill=BUILDING_COLOR, outline="#374151", width=2)
-    roof = [x0 + 4, y0 + 4, x1 - 4, y0 + 12]
-    draw.rounded_rectangle(roof, radius=4, fill="#4B5563", outline="#374151", width=1)
-    for wx in [x0 + 10, x0 + 26]:
-        for wy in [y0 + 18, y0 + 33]:
-            if wx + 8 < x1 - 6 and wy + 8 < y1 - 6:
-                draw.rounded_rectangle([wx, wy, wx + 8, wy + 8], radius=2, fill="#FEF3C7")
-
-
-def draw_park(draw, bbox):
-    x0, y0, x1, y1 = bbox
-    draw.rounded_rectangle(bbox, radius=10, fill=PARK_COLOR, outline="#16A34A", width=2)
-    draw.ellipse([x0 + 11, y0 + 8, x0 + 31, y0 + 28], fill="#16A34A", outline="#166534")
-    draw.rectangle([x0 + 19, y0 + 24, x0 + 23, y1 - 10], fill="#92400E")
-    draw_centered_text(draw, bbox, "🌳", FONT_SMALL, "#166534")
-
-
-def draw_substation(draw, bbox):
-    x0, y0, x1, y1 = bbox
-    draw.rounded_rectangle(bbox, radius=10, fill=SUB_COLOR, outline="#4B5563", width=2)
-    draw.line([x0 + 10, y0 + 16, x1 - 10, y0 + 16], fill="#374151", width=2)
-    draw.line([x0 + 10, y0 + 28, x1 - 10, y0 + 28], fill="#374151", width=2)
-    draw.line([(x0 + x1) / 2, y0 + 10, (x0 + x1) / 2, y1 - 10], fill="#DC2626", width=2)
-    draw_centered_text(draw, bbox, "⚡", FONT_SYMBOL, "#111827")
-
-
-def draw_node(draw, bbox, label, fill, outline):
-    draw.ellipse(
-        [bbox[0] + 5, bbox[1] + 5, bbox[2] - 5, bbox[3] - 5],
-        fill=fill,
-        outline=outline,
-        width=3,
-    )
-    draw_centered_text(draw, bbox, label, FONT_MED, "white")
-
-
-def render_board_image():
-    scenario = st.session_state.scenario
-    power_path = set(st.session_state.power_path)
-    gas_path = set(st.session_state.gas_path)
-
-    width = PAD * 2 + COLS * CELL + (COLS - 1) * GRID_GAP
-    height = PAD * 2 + ROWS * CELL + (ROWS - 1) * GRID_GAP
-
-    img = Image.new("RGB", (width, height), "#E2E8F0")
-    draw = ImageDraw.Draw(img)
-
-    active_target = None
-    if st.session_state.mode == "power":
-        active_target = scenario["B"]
-    elif not st.session_state.done:
-        active_target = scenario["D"]
-
-    for r in range(ROWS):
-        for c in range(COLS):
-            pos = (r, c)
-            bbox = cell_bbox(r, c)
-
-            draw.rounded_rectangle(bbox, radius=10, fill=EMPTY_COLOR, outline=GRID_LINE, width=1)
-
-            if pos in scenario["obstacles"]:
-                kind = scenario["obstacles"][pos]
-                if kind == "building":
-                    draw_building(draw, bbox)
-                elif kind == "park":
-                    draw_park(draw, bbox)
-                else:
-                    draw_substation(draw, bbox)
-            elif pos in power_path:
-                draw.rounded_rectangle(bbox, radius=10, fill=POWER_COLOR, outline="#991B1B", width=2)
-                draw_centered_text(draw, bbox, "E", FONT_MED, "white")
-            elif pos in gas_path:
-                draw.rounded_rectangle(bbox, radius=10, fill=GAS_COLOR, outline="#1D4ED8", width=2)
-                draw_centered_text(draw, bbox, "G", FONT_MED, "white")
-
-            if pos == scenario["A"]:
-                draw_node(draw, bbox, "A", A_COLOR, "#14532D")
-            elif pos == scenario["B"]:
-                draw_node(draw, bbox, "B", B_COLOR, "#14532D")
-            elif pos == scenario["C"]:
-                draw_node(draw, bbox, "C", C_COLOR, "#164E63")
-            elif pos == scenario["D"]:
-                draw_node(draw, bbox, "D", D_COLOR, "#164E63")
-
-            if active_target is not None and pos == active_target:
-                glow_bbox = [bbox[0] + 2, bbox[1] + 2, bbox[2] - 2, bbox[3] - 2]
-                draw.rounded_rectangle(glow_bbox, radius=10, outline=TARGET_GLOW, width=4)
-
-    return img
-
-
-def pixel_to_cell(x, y):
-    x -= PAD
-    y -= PAD
-    if x < 0 or y < 0:
-        return None
-
-    block = CELL + GRID_GAP
-    col = x // block
-    row = y // block
-
-    if not (0 <= row < ROWS and 0 <= col < COLS):
-        return None
-
-    # verificar que el clic cayó dentro de la celda y no en la separación
-    local_x = x % block
-    local_y = y % block
-    if local_x >= CELL or local_y >= CELL:
-        return None
-
-    return int(row), int(col)
-
-# ============================================================
-# UI
+# APP
 # ============================================================
 
 init_state()
+scenario = st.session_state.scenario
 
-st.markdown('<div class="main-title">⚡ Evita la Inducción</div>', unsafe_allow_html=True)
+st.markdown('<div class="title-main">⚡ Evita la Inducción</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtitle">Haz clic directamente sobre el tablero para trazar la red eléctrica A→B y luego la red de gas C→D.</div>',
+    '<div class="subtitle-main">Traza la red eléctrica A→B y luego la red de gas C→D minimizando la interacción entre ambas.</div>',
     unsafe_allow_html=True,
 )
 
-left, right = st.columns([3.4, 1.35], gap="large")
+left, right = st.columns([3.4, 1.3], gap="large")
 
 with left:
     if st.session_state.mode == "power":
-        msg = "Traza la red eléctrica desde A hasta B. El nodo objetivo actual es B."
+        status_msg = "Traza la red eléctrica desde A hasta B. Debes iniciar haciendo clic sobre A."
     elif not st.session_state.done:
-        msg = "Ahora traza la red de gas desde C hasta D. El nodo objetivo actual es D."
+        status_msg = "Ahora traza la red de gas desde C hasta D. Debes iniciar haciendo clic sobre C."
     else:
-        msg = "Escenario completado. Revisa el puntaje, reintenta el mismo caso o genera uno nuevo."
+        status_msg = "Escenario completado. Ya puedes revisar el puntaje o reintentar el trazado."
 
-    st.markdown(f'<div class="status-box">{msg}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="status-box">{status_msg}</div>', unsafe_allow_html=True)
 
-    board = render_board_image()
-    click = streamlit_image_coordinates(
-        board,
-        key="board_click",
-        use_column_width="auto",
-    )
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">Tablero</div>', unsafe_allow_html=True)
 
-    if click is not None and "x" in click and "y" in click:
-        pos = pixel_to_cell(click["x"], click["y"])
-        if pos is not None:
-            handle_cell_click(pos)
-            st.rerun()
+    power_path = set(st.session_state.power_path)
+    gas_path = set(st.session_state.gas_path)
+
+    for r in range(ROWS):
+        cols = st.columns(COLS, gap="small")
+        for c in range(COLS):
+            pos = (r, c)
+            label, help_text = cell_info(
+                pos,
+                scenario,
+                power_path,
+                gas_path,
+                st.session_state.mode,
+                st.session_state.done,
+            )
+
+            disabled = pos in scenario["obstacles"]
+
+            button_type = "secondary"
+            if pos == scenario["A"] or pos == scenario["B"]:
+                button_type = "primary"
+            if pos == scenario["C"] or pos == scenario["D"]:
+                button_type = "primary"
+
+            if cols[c].button(
+                label,
+                key=f"cell_{r}_{c}",
+                help=help_text,
+                disabled=disabled,
+                use_container_width=True,
+                type=button_type,
+            ):
+                handle_cell_click(pos)
+                st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 with right:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">Controles</div>', unsafe_allow_html=True)
 
-    current = st.slider("Corriente de la red eléctrica [A]", 100, 1500, st.session_state.current_a, 50)
+    current = st.slider(
+        "Corriente de la red eléctrica [A]",
+        min_value=100,
+        max_value=1500,
+        value=st.session_state.current_a,
+        step=50,
+    )
     st.session_state.current_a = current
 
     c1, c2 = st.columns(2)
@@ -622,16 +492,16 @@ with right:
     st.markdown('<div class="card-title">Leyenda</div>', unsafe_allow_html=True)
     st.markdown(
         """
-        <div class="legend-grid">
-            <div class="legend-item"><span class="legend-swatch" style="background:#16a34a;">A</span> Inicio eléctrico</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#15803d;">B</span> Fin eléctrico</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#0891b2;">C</span> Inicio gas</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#0e7490;">D</span> Fin gas</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#d62828;">E</span> Ruta eléctrica</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#2563eb;">G</span> Ruta de gas</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#6b7280;">🏢</span> Edificio</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#86efac;color:#166534;">🌳</span> Parque</div>
-            <div class="legend-item"><span class="legend-swatch" style="background:#d1d5db;color:#111827;">⚡</span> Subestación</div>
+        <div class="board-legend">
+            <div class="legend-item">A = Inicio eléctrico</div>
+            <div class="legend-item">B = Fin eléctrico</div>
+            <div class="legend-item">C = Inicio gas</div>
+            <div class="legend-item">D = Fin gas</div>
+            <div class="legend-item">🔴 = Ruta eléctrica</div>
+            <div class="legend-item">🔵 = Ruta de gas</div>
+            <div class="legend-item">🏢 = Edificio</div>
+            <div class="legend-item">🌳 = Parque</div>
+            <div class="legend-item">⚡ = Subestación</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -644,19 +514,15 @@ with right:
     st.write(f"**Ruta eléctrica:** {len(st.session_state.power_path)} celdas")
     st.write(f"**Ruta de gas:** {len(st.session_state.gas_path)} celdas")
 
-    if st.session_state.done:
-        score = score_path(
-            st.session_state.power_path,
-            st.session_state.gas_path,
-            st.session_state.current_a,
-        )
+    if st.session_state.done and st.session_state.current_score is not None:
+        score = st.session_state.current_score
         cls, desc = score_class(score)
         st.markdown(
             f"""
             <div class="score-box">
                 <div class="score-label">Puntaje obtenido</div>
                 <div class="score-value {cls}">{score:.1f}</div>
-                <div class="{cls}" style="font-weight:800; font-size:1.08rem;">{desc}</div>
+                <div class="{cls}" style="font-weight:800; font-size:1.05rem;">{desc}</div>
             </div>
             """,
             unsafe_allow_html=True,
