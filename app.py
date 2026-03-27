@@ -27,92 +27,132 @@ st.markdown(
     """
     <style>
     .block-container {
-        max-width: 1500px;
-        padding-top: 1rem;
+        max-width: 1480px;
+        padding-top: 0.8rem;
         padding-bottom: 1rem;
     }
 
     .title-main {
-        font-size: 2.2rem;
-        font-weight: 800;
+        font-size: 2.35rem;
+        font-weight: 900;
         color: #0f172a;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.15rem;
+        letter-spacing: -0.02em;
     }
 
     .subtitle-main {
-        font-size: 1.02rem;
-        color: #334155;
+        font-size: 1.05rem;
+        color: #475569;
         margin-bottom: 1rem;
     }
 
     .card {
-        background: #f8fafc;
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
         border: 1px solid #cbd5e1;
-        border-radius: 16px;
-        padding: 1rem;
+        border-radius: 18px;
+        padding: 1rem 1rem 0.9rem 1rem;
         margin-bottom: 1rem;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
     }
 
     .card-title {
-        font-size: 1.15rem;
+        font-size: 1.12rem;
         font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.7rem;
+        margin-bottom: 0.75rem;
+        letter-spacing: -0.01em;
     }
 
     .status-box {
-        background: #eff6ff;
+        background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%);
         border: 1px solid #93c5fd;
-        color: #1e3a8a;
-        border-radius: 12px;
-        padding: 0.8rem 0.95rem;
+        color: #1d4ed8;
+        border-radius: 14px;
+        padding: 0.85rem 1rem;
         font-size: 1rem;
         font-weight: 700;
-        margin-bottom: 0.8rem;
+        margin-bottom: 0.9rem;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
     }
 
     .board-legend {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px 12px;
+        gap: 10px 14px;
     }
 
     .legend-item {
         font-size: 0.95rem;
-        color: #1f2937;
+        color: #1e293b;
+        background: rgba(255,255,255,0.6);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.45rem 0.6rem;
     }
 
     .score-box {
-        background: white;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         border: 2px solid #cbd5e1;
-        border-radius: 18px;
+        border-radius: 20px;
         padding: 1rem;
         text-align: center;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
     }
 
     .score-label {
         font-size: 1rem;
-        color: #475569;
-        font-weight: 700;
-        margin-bottom: 0.4rem;
+        color: #64748b;
+        font-weight: 800;
+        margin-bottom: 0.45rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
     .score-value {
-        font-size: 2.7rem;
+        font-size: 3rem;
         font-weight: 900;
-        line-height: 1.05;
+        line-height: 1;
+        margin-bottom: 0.2rem;
     }
 
     .score-low { color: #15803d; }
     .score-mid { color: #d97706; }
     .score-high { color: #dc2626; }
 
+    .mini-note {
+        font-size: 0.92rem;
+        color: #64748b;
+        margin-top: 0.35rem;
+    }
+
     div[data-testid="stButton"] > button {
         width: 100%;
-        min-height: 2.8rem;
-        border-radius: 10px;
-        font-weight: 700;
-        padding: 0.2rem 0.2rem;
+        min-height: 3rem;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 1rem;
+        border: 1px solid #cbd5e1;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+        transition: all 0.12s ease-in-out;
+    }
+
+    div[data-testid="stButton"] > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+    }
+
+    div[data-testid="stButton"] > button:disabled {
+        opacity: 0.55;
+        border: 1px solid #cbd5e1;
+        background: #e5e7eb;
+        color: #6b7280;
+    }
+
+    .footer-tip {
+        color: #64748b;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-top: 0.3rem;
     }
     </style>
     """,
@@ -403,7 +443,7 @@ scenario = st.session_state.scenario
 
 st.markdown('<div class="title-main">⚡ Evita la Inducción</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtitle-main">Traza la red eléctrica A→B y luego la red de gas C→D minimizando la interacción entre ambas.</div>',
+    '<div class="subtitle-main">Diseña el trazado de una red eléctrica y una red de gas minimizando la tensión inducida entre ambas.</div>',
     unsafe_allow_html=True,
 )
 
@@ -411,11 +451,11 @@ left, right = st.columns([3.4, 1.3], gap="large")
 
 with left:
     if st.session_state.mode == "power":
-        status_msg = "Traza la red eléctrica desde A hasta B. Debes iniciar haciendo clic sobre A."
+        status_msg = "Paso 1. Traza la red eléctrica desde A hasta B. Debes iniciar haciendo clic sobre A."
     elif not st.session_state.done:
-        status_msg = "Ahora traza la red de gas desde C hasta D. Debes iniciar haciendo clic sobre C."
+        status_msg = "Paso 2. Traza la red de gas desde C hasta D. Debes iniciar haciendo clic sobre C."
     else:
-        status_msg = "Escenario completado. Ya puedes revisar el puntaje o reintentar el trazado."
+        status_msg = "Ejercicio completado. Revisa el puntaje obtenido o reintenta el mismo escenario."
 
     st.markdown(f'<div class="status-box">{status_msg}</div>', unsafe_allow_html=True)
 
@@ -493,15 +533,15 @@ with right:
     st.markdown(
         """
         <div class="board-legend">
-            <div class="legend-item">A = Inicio eléctrico</div>
-            <div class="legend-item">B = Fin eléctrico</div>
-            <div class="legend-item">C = Inicio gas</div>
-            <div class="legend-item">D = Fin gas</div>
-            <div class="legend-item">🔴 = Ruta eléctrica</div>
-            <div class="legend-item">🔵 = Ruta de gas</div>
-            <div class="legend-item">🏢 = Edificio</div>
-            <div class="legend-item">🌳 = Parque</div>
-            <div class="legend-item">⚡ = Subestación</div>
+            <div class="legend-item">🟢 <b>A</b>: inicio de la red eléctrica</div>
+            <div class="legend-item">🟢 <b>B</b>: fin de la red eléctrica</div>
+            <div class="legend-item">🔵 <b>C</b>: inicio de la red de gas</div>
+            <div class="legend-item">🔵 <b>D</b>: fin de la red de gas</div>
+            <div class="legend-item">🔴 ruta de la red eléctrica</div>
+            <div class="legend-item">🔵 ruta de la red de gas</div>
+            <div class="legend-item">🏢 edificio</div>
+            <div class="legend-item">🌳 parque</div>
+            <div class="legend-item">⚡ subestación</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -522,7 +562,8 @@ with right:
             <div class="score-box">
                 <div class="score-label">Puntaje obtenido</div>
                 <div class="score-value {cls}">{score:.1f}</div>
-                <div class="{cls}" style="font-weight:800; font-size:1.05rem;">{desc}</div>
+                <div class="{cls}" style="font-weight:900; font-size:1.08rem;">{desc}</div>
+                <div class="mini-note">Menor puntaje = menor interacción electromagnética</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -532,11 +573,17 @@ with right:
             """
             <div class="score-box">
                 <div class="score-label">Puntaje obtenido</div>
-                <div class="score-value" style="color:#64748b;">--</div>
+                <div class="score-value" style="color:#94a3b8;">--</div>
                 <div style="color:#64748b; font-weight:800;">Aún no calculado</div>
+                <div class="mini-note">Completa ambas rutas para obtener el resultado</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="footer-tip">Actividad didáctica para analizar interacción entre infraestructuras subterráneas.</div>',
+        unsafe_allow_html=True,
+    )
