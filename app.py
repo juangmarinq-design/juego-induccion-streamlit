@@ -84,7 +84,7 @@ st.markdown(
     .legend-item {
         font-size: 0.95rem;
         color: #1e293b;
-        background: rgba(255,255,255,0.6);
+        background: rgba(255,255,255,0.65);
         border: 1px solid #e2e8f0;
         border-radius: 12px;
         padding: 0.45rem 0.6rem;
@@ -125,6 +125,24 @@ st.markdown(
         margin-top: 0.35rem;
     }
 
+    .footer-tip {
+        color: #64748b;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-top: 0.3rem;
+    }
+
+    .info-strip {
+        background: #fff7ed;
+        color: #9a3412;
+        border: 1px solid #fdba74;
+        border-radius: 12px;
+        padding: 0.75rem 0.9rem;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-top: 0.9rem;
+    }
+
     div[data-testid="stButton"] > button {
         width: 100%;
         min-height: 3rem;
@@ -134,6 +152,8 @@ st.markdown(
         border: 1px solid #cbd5e1;
         box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
         transition: all 0.12s ease-in-out;
+        white-space: nowrap;
+        padding: 0.2rem 0.1rem;
     }
 
     div[data-testid="stButton"] > button:hover {
@@ -146,13 +166,6 @@ st.markdown(
         border: 1px solid #cbd5e1;
         background: #e5e7eb;
         color: #6b7280;
-    }
-
-    .footer-tip {
-        color: #64748b;
-        font-size: 0.9rem;
-        text-align: center;
-        margin-top: 0.3rem;
     }
     </style>
     """,
@@ -247,6 +260,36 @@ def score_class(score):
         return "score-mid", "Inducción moderada"
     return "score-high", "Inducción alta"
 
+
+def cell_style(pos, scenario, power_path, gas_path):
+    if pos in scenario["obstacles"]:
+        kind = scenario["obstacles"][pos]
+        if kind == "building":
+            return "🏢", "Edificio (bloque urbano)"
+        if kind == "park":
+            return "🌿", "Zona verde"
+        return "🟫", "Infraestructura crítica"
+
+    if pos == scenario["A"]:
+        return "🟢A", "Inicio eléctrico"
+
+    if pos == scenario["B"]:
+        return "🟢B", "Fin eléctrico"
+
+    if pos == scenario["C"]:
+        return "🔵C", "Inicio gas"
+
+    if pos == scenario["D"]:
+        return "🔵D", "Fin gas"
+
+    if pos in power_path:
+        return "🔴━", "Red eléctrica"
+
+    if pos in gas_path:
+        return "🔵━", "Red de gas"
+
+    return " ", "Celda libre"
+
 # ============================================================
 # ESCENARIO
 # ============================================================
@@ -258,7 +301,7 @@ def generate_obstacles():
             if random.random() < OBSTACLE_DENSITY:
                 kind = random.choices(
                     ["building", "park", "substation"],
-                    weights=[70, 18, 12],
+                    weights=[65, 20, 15],
                     k=1,
                 )[0]
                 obstacles[(r, c)] = kind
@@ -362,38 +405,8 @@ def restore_previous():
         reset_same_scenario()
 
 # ============================================================
-# TABLERO
+# INTERACCIÓN
 # ============================================================
-
-def cell_info(pos, scenario, power_path, gas_path, mode, done):
-    if pos in scenario["obstacles"]:
-        kind = scenario["obstacles"][pos]
-        if kind == "building":
-            return "🏢", "Edificio"
-        if kind == "park":
-            return "🌳", "Parque"
-        return "⚡", "Subestación"
-
-    if pos == scenario["A"]:
-        return "A", "Inicio eléctrico"
-    if pos == scenario["B"]:
-        return "B", "Fin eléctrico"
-    if pos == scenario["C"]:
-        return "C", "Inicio gas"
-    if pos == scenario["D"]:
-        return "D", "Fin gas"
-    if pos in power_path:
-        return "🔴", "Ruta eléctrica"
-    if pos in gas_path:
-        return "🔵", "Ruta de gas"
-
-    if mode == "power" and pos == scenario["B"]:
-        return "B", "Objetivo actual"
-    if mode == "gas" and pos == scenario["D"]:
-        return "D", "Objetivo actual"
-
-    return "·", "Celda libre"
-
 
 def handle_cell_click(pos):
     scenario = st.session_state.scenario
@@ -469,21 +482,12 @@ with left:
         cols = st.columns(COLS, gap="small")
         for c in range(COLS):
             pos = (r, c)
-            label, help_text = cell_info(
-                pos,
-                scenario,
-                power_path,
-                gas_path,
-                st.session_state.mode,
-                st.session_state.done,
-            )
+            label, help_text = cell_style(pos, scenario, power_path, gas_path)
 
             disabled = pos in scenario["obstacles"]
 
             button_type = "secondary"
-            if pos == scenario["A"] or pos == scenario["B"]:
-                button_type = "primary"
-            if pos == scenario["C"] or pos == scenario["D"]:
+            if pos in {scenario["A"], scenario["B"], scenario["C"], scenario["D"]}:
                 button_type = "primary"
 
             if cols[c].button(
@@ -496,6 +500,11 @@ with left:
             ):
                 handle_cell_click(pos)
                 st.rerun()
+
+    st.markdown(
+        '<div class="info-strip">💡 Evita trayectorias paralelas y muy cercanas entre redes para reducir la inducción.</div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -537,15 +546,22 @@ with right:
             <div class="legend-item">🟢 <b>B</b>: fin de la red eléctrica</div>
             <div class="legend-item">🔵 <b>C</b>: inicio de la red de gas</div>
             <div class="legend-item">🔵 <b>D</b>: fin de la red de gas</div>
-            <div class="legend-item">🔴 ruta de la red eléctrica</div>
-            <div class="legend-item">🔵 ruta de la red de gas</div>
+            <div class="legend-item">🔴━ red eléctrica</div>
+            <div class="legend-item">🔵━ red de gas</div>
             <div class="legend-item">🏢 edificio</div>
-            <div class="legend-item">🌳 parque</div>
-            <div class="legend-item">⚡ subestación</div>
+            <div class="legend-item">🌿 zona verde</div>
+            <div class="legend-item">🟫 infraestructura crítica</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">Interpretación del trazado</div>', unsafe_allow_html=True)
+    st.write("🔴 Red eléctrica → fuente de campo magnético")
+    st.write("🔵 Red de gas → conductor susceptible")
+    st.write("⚠️ Cercanía y paralelismo aumentan la inducción")
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
