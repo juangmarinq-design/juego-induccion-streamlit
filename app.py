@@ -315,8 +315,58 @@ def generate_valid_scenario():
 # ============================================================
 
 def init_state():
+
+    FIXED_SCENARIO = {
+        "A": (1, 1),
+        "B": (8, 12),
+
+        "C": (8, 1),
+        "D": (1, 12),
+
+        "obstacles": {
+
+            # Bloque urbano superior
+            (1,4): "building",
+            (1,5): "building",
+            (1,6): "building",
+
+            (2,4): "building",
+            (2,5): "building",
+
+            # Bloque central
+            (4,5): "building",
+            (4,6): "building",
+            (4,7): "building",
+
+            (5,5): "building",
+            (5,6): "building",
+
+            # Infraestructura crítica
+            (3,10): "substation",
+            (4,10): "substation",
+
+            # Zona verde
+            (7,4): "park",
+            (7,5): "park",
+
+            # Corredor inferior
+            (8,7): "building",
+            (8,8): "building",
+
+            # Zona derecha
+            (6,11): "building",
+            (7,11): "building",
+
+            # Obstáculos aislados
+            (2,8): "building",
+            (6,3): "building",
+            (3,2): "park",
+        }
+    }
+
     if "scenario" not in st.session_state:
-        st.session_state.scenario = generate_valid_scenario()
+        st.session_state.scenario = FIXED_SCENARIO
+
         st.session_state.previous_scenario = None
         st.session_state.power_path = []
         st.session_state.gas_path = []
