@@ -12,10 +12,10 @@ st.set_page_config(
 # CONFIGURACIÓN
 # ============================================================
 
-ROWS = 10
-COLS = 14
-OBSTACLE_DENSITY = 0.16
-MIN_DIST = 7
+ROWS = 6
+COLS = 8
+OBSTACLE_DENSITY = 0.14
+MIN_DIST = 4
 MAX_SCENARIO_ATTEMPTS = 400
 
 # ============================================================
@@ -317,52 +317,31 @@ def generate_valid_scenario():
 def init_state():
 
     FIXED_SCENARIO = {
-        "A": (2, 2),
-        "B": (8, 12),
+    "A": (0, 0),
+    "B": (5, 7),
 
-        "C": (8, 1),
-        "D": (1, 12),
+    "C": (5, 0),
+    "D": (0, 7),
 
-        "obstacles": {
+    "obstacles": {
+        # Bloque urbano central
+        (1, 2): "building",
+        (1, 3): "building",
+        (2, 3): "building",
 
-            # Bloque urbano superior
-            (1,4): "building",
-            (1,5): "building",
-            (1,6): "building",
+        # Infraestructura crítica
+        (3, 4): "substation",
+        (4, 4): "substation",
 
-            (2,4): "building",
-            (2,5): "building",
+        # Zona verde
+        (2, 6): "park",
+        (3, 6): "park",
 
-            # Bloque central
-            (4,5): "building",
-            (4,6): "building",
-            (4,7): "building",
-
-            (5,5): "building",
-            (5,6): "building",
-
-            # Infraestructura crítica
-            (3,10): "substation",
-            (4,10): "substation",
-
-            # Zona verde
-            (7,4): "park",
-            (7,5): "park",
-
-            # Corredor inferior
-            (8,7): "building",
-            (8,8): "building",
-
-            # Zona derecha
-            (6,11): "building",
-            (7,11): "building",
-
-            # Obstáculos aislados
-            (2,8): "building",
-            (6,3): "building",
-            (3,2): "park",
-        }
+        # Obstáculos laterales
+        (4, 1): "building",
+        (2, 1): "building",
     }
+}
 
     if "scenario" not in st.session_state:
         st.session_state.scenario = FIXED_SCENARIO
