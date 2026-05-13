@@ -330,7 +330,7 @@ def init_state():
         (2, 3): "building",
 
         # Infraestructura crítica
-        (3, 4): "substation",
+        (2, 5): "substation",
         (4, 4): "substation",
 
         # Zona verde
