@@ -317,29 +317,26 @@ def generate_valid_scenario():
 def init_state():
 
     FIXED_SCENARIO = {
-    "A": (2, 2),
-    "B": (5, 7),
+    # Red eléctrica: corredor superior
+    "A": (1, 0),
+    "B": (1, 7),
 
-    "C": (4, 2),
-    "D": (0, 7),
+    # Red de gas: corredor inferior
+    "C": (4, 0),
+    "D": (4, 7),
 
     "obstacles": {
-        # Bloque urbano central
-        (1, 2): "building",
+        # Obstáculos superiores: obligan a decidir por arriba o por el centro
         (1, 3): "building",
         (2, 3): "building",
 
-        # Infraestructura crítica
-        (2, 5): "substation",
+        # Obstáculos centrales: separan parcialmente las dos infraestructuras
+        (3, 4): "substation",
         (4, 4): "substation",
 
-        # Zona verde
-        (2, 6): "park",
-        (3, 6): "park",
-
-        # Obstáculos laterales
-        (4, 1): "building",
-        (2, 1): "building",
+        # Obstáculos laterales suaves
+        (0, 5): "park",
+        (5, 2): "park",
     }
 }
 
