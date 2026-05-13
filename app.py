@@ -317,10 +317,10 @@ def generate_valid_scenario():
 def init_state():
 
     FIXED_SCENARIO = {
-    "A": (0, 0),
+    "A": (2, 2),
     "B": (5, 7),
 
-    "C": (5, 0),
+    "C": (4, 2),
     "D": (0, 7),
 
     "obstacles": {
