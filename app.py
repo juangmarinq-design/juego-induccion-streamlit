@@ -1,4 +1,5 @@
 import random
+import math
 from collections import deque
 import streamlit as st
 
@@ -159,13 +160,32 @@ st.markdown(
 # ============================================================
 
 def neighbors(r, c):
-    for dr, dc in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+    """
+    Permite movimiento en 8 direcciones:
+    horizontal, vertical y diagonal.
+    """
+    for dr, dc in [
+        (1, 0), (-1, 0), (0, 1), (0, -1),
+        (1, 1), (1, -1), (-1, 1), (-1, -1)
+    ]:
         rr, cc = r + dr, c + dc
         if 0 <= rr < ROWS and 0 <= cc < COLS:
             yield rr, cc
 
+
 def manhattan(a, b):
+    """
+    Se mantiene para separar puntos y estimar progreso.
+    """
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def euclidean(a, b):
+    """
+    Distancia usada para evaluar separación cuando hay rutas oblicuas.
+    """
+    return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+
 
 def path_exists(start, end, obstacles):
     queue = deque([start])
@@ -175,14 +195,18 @@ def path_exists(start, end, obstacles):
         current = queue.popleft()
         if current == end:
             return True
+
         for n in neighbors(*current):
             if n not in visited and n not in obstacles:
                 visited.add(n)
                 queue.append(n)
+
     return False
+
 
 def free_neighbors_count(cell, obstacles):
     return sum(1 for n in neighbors(*cell) if n not in obstacles)
+
 
 def score_path(power_path, gas_path, current):
     base = 0.0
@@ -191,17 +215,18 @@ def score_path(power_path, gas_path, current):
 
     for a in power_path:
         for b in gas_path:
-            d = manhattan(a, b)
+            d = euclidean(a, b)
+
             if d == 0:
                 base += 1000
             else:
                 base += 1 / (d ** 2)
 
-            if d == 1:
+            if d <= 1.1:
                 close_penalty += 8.0
-            elif d == 2:
+            elif d <= 2.1:
                 close_penalty += 3.5
-            elif d == 3:
+            elif d <= 3.1:
                 close_penalty += 1.2
 
     power_segments = list(zip(power_path[:-1], power_path[1:]))
@@ -209,23 +234,33 @@ def score_path(power_path, gas_path, current):
 
     def orientation(seg):
         (r1, c1), (r2, c2) = seg
-        if r1 == r2:
+
+        dr = r2 - r1
+        dc = c2 - c1
+
+        if dr == 0:
             return "h"
-        if c1 == c2:
+        if dc == 0:
             return "v"
+        if dr == dc:
+            return "diag_down"
+        if dr == -dc:
+            return "diag_up"
         return "o"
 
     for ps in power_segments:
         for gs in gas_segments:
             if orientation(ps) == orientation(gs):
-                dmin = min(manhattan(p1, p2) for p1 in ps for p2 in gs)
-                if dmin == 1:
+                dmin = min(euclidean(p1, p2) for p1 in ps for p2 in gs)
+
+                if dmin <= 1.1:
                     parallel_penalty += 9.0
-                elif dmin == 2:
+                elif dmin <= 2.1:
                     parallel_penalty += 4.0
 
     total = current * (base + close_penalty + parallel_penalty) / 100.0
     return max(total, 0.0)
+
 
 def score_class(score):
     if score < 80:
@@ -234,8 +269,9 @@ def score_class(score):
         return "score-mid", "Inducción moderada"
     return "score-high", "Inducción alta"
 
+
 # ============================================================
-# ESCENARIO
+# ESCENARIO ALEATORIO
 # ============================================================
 
 def generate_obstacles():
@@ -250,6 +286,7 @@ def generate_obstacles():
                 )[0]
                 obstacles[(r, c)] = kind
     return obstacles
+
 
 def generate_valid_scenario():
     for _ in range(MAX_SCENARIO_ATTEMPTS):
@@ -275,10 +312,10 @@ def generate_valid_scenario():
                 x for x in remaining
                 if x != c
                 and manhattan(c, x) >= MIN_DIST
-                and manhattan(c, A) >= 4
-                and manhattan(c, B) >= 4
-                and manhattan(x, A) >= 4
-                and manhattan(x, B) >= 4
+                and manhattan(c, A) >= 3
+                and manhattan(c, B) >= 3
+                and manhattan(x, A) >= 3
+                and manhattan(x, B) >= 3
             ]
             if candidates_d:
                 C = c
@@ -310,6 +347,7 @@ def generate_valid_scenario():
 
     raise RuntimeError("No fue posible generar un escenario válido.")
 
+
 # ============================================================
 # ESTADO
 # ============================================================
@@ -317,32 +355,29 @@ def generate_valid_scenario():
 def init_state():
 
     FIXED_SCENARIO = {
-    # Red eléctrica: corredor superior
-    "A": (1, 0),
-    "B": (1, 7),
+        "A": (1, 0),
+        "B": (1, 7),
 
-    # Red de gas: corredor inferior
-    "C": (4, 0),
-    "D": (4, 7),
+        "C": (4, 0),
+        "D": (4, 7),
 
-    "obstacles": {
-        # Obstáculos superiores: obligan a decidir por arriba o por el centro
-        (1, 3): "building",
-        (2, 3): "building",
+        "obstacles": {
+            # Obstáculos superiores
+            (1, 3): "building",
+            (2, 3): "building",
 
-        # Obstáculos centrales: separan parcialmente las dos infraestructuras
-        (3, 4): "substation",
-        (4, 4): "substation",
+            # Obstáculos centrales
+            (3, 4): "substation",
+            (4, 4): "substation",
 
-        # Obstáculos laterales suaves
-        (0, 5): "park",
-        (5, 2): "park",
+            # Zonas verdes
+            (0, 5): "park",
+            (5, 2): "park",
+        }
     }
-}
 
     if "scenario" not in st.session_state:
         st.session_state.scenario = FIXED_SCENARIO
-
         st.session_state.previous_scenario = None
         st.session_state.power_path = []
         st.session_state.gas_path = []
@@ -351,6 +386,7 @@ def init_state():
         st.session_state.current_score = None
         st.session_state.I = 800
 
+
 def reset_same_scenario():
     st.session_state.power_path = []
     st.session_state.gas_path = []
@@ -358,10 +394,12 @@ def reset_same_scenario():
     st.session_state.done = False
     st.session_state.current_score = None
 
+
 def new_scenario():
     st.session_state.previous_scenario = st.session_state.scenario
     st.session_state.scenario = generate_valid_scenario()
     reset_same_scenario()
+
 
 def restore_previous():
     if st.session_state.previous_scenario is not None:
@@ -369,6 +407,7 @@ def restore_previous():
         st.session_state.scenario = st.session_state.previous_scenario
         st.session_state.previous_scenario = current
         reset_same_scenario()
+
 
 def undo_step():
     if st.session_state.mode == "power":
@@ -380,6 +419,7 @@ def undo_step():
 
     st.session_state.done = False
     st.session_state.current_score = None
+
 
 # ============================================================
 # GUÍA INTELIGENTE
@@ -398,7 +438,11 @@ def valid_next_cells():
     if len(path) == 0:
         return {start}
 
-    return {n for n in neighbors(*path[-1]) if n not in scenario["obstacles"] and n not in path}
+    return {
+        n for n in neighbors(*path[-1])
+        if n not in scenario["obstacles"] and n not in path
+    }
+
 
 # ============================================================
 # INTERACCIÓN
@@ -443,9 +487,38 @@ def handle_cell_click(pos):
                 st.session_state.I,
             )
 
+
 # ============================================================
 # VISUALIZACIÓN DE CELDAS
 # ============================================================
+
+def segment_symbol(path, pos):
+    """
+    Devuelve un símbolo aproximado de dirección para la ruta.
+    """
+    if pos not in path:
+        return "━"
+
+    idx = path.index(pos)
+
+    if idx == 0:
+        return "●"
+
+    prev_pos = path[idx - 1]
+    dr = pos[0] - prev_pos[0]
+    dc = pos[1] - prev_pos[1]
+
+    if dr == 0:
+        return "━"
+    if dc == 0:
+        return "┃"
+    if dr == dc:
+        return "╲"
+    if dr == -dc:
+        return "╱"
+
+    return "━"
+
 
 def cell_style(pos, scenario, power_path, gas_path, valid_cells):
     if pos in scenario["obstacles"]:
@@ -466,14 +539,16 @@ def cell_style(pos, scenario, power_path, gas_path, valid_cells):
         return "🔵D", "Fin gas"
 
     if pos in power_path:
-        return "🔴━", "Red eléctrica"
+        return f"🔴{segment_symbol(power_path, pos)}", "Red eléctrica"
+
     if pos in gas_path:
-        return "🔵━", "Red de gas"
+        return f"🔵{segment_symbol(gas_path, pos)}", "Red de gas"
 
     if pos in valid_cells:
         return "▫️", "Movimiento válido"
 
     return "·", "Celda libre"
+
 
 # ============================================================
 # APP
@@ -492,10 +567,10 @@ left, right = st.columns([4.2, 1.1], gap="large")
 
 with left:
     if st.session_state.mode == "power":
-        status_msg = "Paso 1. Traza la red eléctrica desde A hasta B."
+        status_msg = "Paso 1. Traza la red eléctrica desde A hasta B. Se permiten rutas rectas y oblicuas."
         progress = len(st.session_state.power_path) / max(1, manhattan(scenario["A"], scenario["B"]))
     elif not st.session_state.done:
-        status_msg = "Paso 2. Traza la red de gas desde C hasta D."
+        status_msg = "Paso 2. Traza la red de gas desde C hasta D. Se permiten rutas rectas y oblicuas."
         progress = len(st.session_state.gas_path) / max(1, manhattan(scenario["C"], scenario["D"]))
     else:
         status_msg = "Ejercicio completado. Revisa el puntaje o reintenta."
@@ -507,15 +582,23 @@ with left:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">Mapa tipo ciudad</div>', unsafe_allow_html=True)
 
-    power_path = set(st.session_state.power_path)
-    gas_path = set(st.session_state.gas_path)
+    power_path_list = st.session_state.power_path
+    gas_path_list = st.session_state.gas_path
+    power_path = set(power_path_list)
+    gas_path = set(gas_path_list)
     valid_cells = valid_next_cells()
 
     for r in range(ROWS):
         cols = st.columns(COLS)
         for c in range(COLS):
             pos = (r, c)
-            label, help_text = cell_style(pos, scenario, power_path, gas_path, valid_cells)
+            label, help_text = cell_style(
+                pos,
+                scenario,
+                power_path_list,
+                gas_path_list,
+                valid_cells
+            )
             disabled = pos in scenario["obstacles"]
 
             button_type = "secondary"
@@ -534,7 +617,7 @@ with left:
                 st.rerun()
 
     st.markdown(
-        '<div class="info-strip">💡 Guía inteligente: las celdas resaltadas indican por dónde puedes continuar el trazado.</div>',
+        '<div class="info-strip">💡 Guía inteligente: las celdas resaltadas indican por dónde puedes continuar el trazado. Se permiten movimientos diagonales.</div>',
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
@@ -576,8 +659,12 @@ with right:
             <div class="legend-item">🟢B fin eléctrico</div>
             <div class="legend-item">🔵C inicio gas</div>
             <div class="legend-item">🔵D fin gas</div>
-            <div class="legend-item">🔴━ red eléctrica</div>
-            <div class="legend-item">🔵━ red de gas</div>
+            <div class="legend-item">🔴━ red eléctrica horizontal</div>
+            <div class="legend-item">🔴┃ red eléctrica vertical</div>
+            <div class="legend-item">🔴╱ / 🔴╲ red eléctrica oblicua</div>
+            <div class="legend-item">🔵━ red de gas horizontal</div>
+            <div class="legend-item">🔵┃ red de gas vertical</div>
+            <div class="legend-item">🔵╱ / 🔵╲ red de gas oblicua</div>
             <div class="legend-item">🏢 edificio</div>
             <div class="legend-item">🌳 parque</div>
             <div class="legend-item">⚡ infraestructura crítica</div>
